@@ -1,0 +1,280 @@
+# =============================================================================
+# ci-cd.yml — DataForge GitHub Actions CI/CD Pipeline
+#
+# WHAT IS CI/CD?
+#   CI (Continuous Integration): Every time code is pushed, the pipeline
+#   automatically builds and tests it. This catches bugs within minutes of
+#   introduction rather than days or weeks later.
+#
+#   CD (Continuous Delivery/Deployment): After CI passes, the pipeline
+#   automatically delivers the build to staging or production environments,
+#   removing the need for manual deployments.
+#
+# HOW GITHUB ACTIONS WORKS:
+#   - This file lives in .github/workflows/ and GitHub reads it automatically.
+#   - A "workflow" is triggered by events (push, pull_request, etc.).
+#   - A workflow contains "jobs". Jobs run in parallel by default.
+#   - Each job runs on a fresh virtual machine ("runner").
+#   - "needs:" makes a job wait for another job to finish first.
+#   - "steps:" are the individual commands within a job.
+#
+# PIPELINE OVERVIEW:
+#   test ──┬── build ──── security-scan ──── deploy-staging ──── deploy-production
+#          └── code-quality
+# =============================================================================
+
+name: DataForge CI/CD Pipeline
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TRIGGERS — when does this pipeline run?
+# ─────────────────────────────────────────────────────────────────────────────
+on:
+  push:
+    branches:
+      - main       # runs on every push to main (production deploys)
+      - develop    # runs on every push to develop (staging deploys)
+  pull_request:
+    branches:
+      - main       # runs when a PR targets main (prevents broken merges)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOBS
+# ─────────────────────────────────────────────────────────────────────────────
+jobs:
+
+  # ===========================================================================
+  # Job 1: TEST
+  # Runs all JUnit 5 unit and integration tests.
+  # This is the gate — all other jobs depend on this passing.
+  # ===========================================================================
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Clone the repository into the runner's filesystem
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step 2: Install Java 17 (Temurin = Eclipse Adoptium, the most common free JDK)
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      # Step 3: Cache the ~/.m2 Maven local repository.
+      # On the first run, Maven downloads all dependencies (~300 MB).
+      # On subsequent runs, the cache is restored — saving several minutes.
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          # The cache key includes the pom.xml hash — cache is invalidated
+          # automatically when dependencies change
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      # Step 4: Run the full test suite
+      - name: Run tests
+        run: mvn test
+
+      # Step 5: Save test reports so they can be downloaded from the GitHub UI
+      # even if the tests fail (always: true ensures this runs on failure too)
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: target/surefire-reports/
+          retention-days: 7
+
+  # ===========================================================================
+  # Job 2: BUILD
+  # Compiles the project and builds the Docker image.
+  # Only runs if the test job passes (needs: test).
+  # ===========================================================================
+  build:
+    name: Build JAR and Docker Image
+    runs-on: ubuntu-latest
+    needs: test    # wait for tests to pass before building
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      # Build the fat JAR (skip tests — already run in the test job)
+      - name: Build JAR
+        run: mvn clean package -DskipTests
+
+      # Tag the Docker image with the git commit SHA for traceability.
+      # Every build produces a uniquely tagged image — no "latest" ambiguity.
+      - name: Build Docker image
+        run: docker build -t dataforge:${{ github.sha }} .
+
+      # Upload the JAR as a build artifact — downloadable from the GitHub UI
+      - name: Upload JAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dataforge-jar
+          path: target/*.jar
+          retention-days: 7
+
+  # ===========================================================================
+  # Job 3: CODE QUALITY
+  # Runs Checkstyle to check for code style violations.
+  # Runs in parallel with the build job (both depend only on test).
+  # exit-code: 0 means violations are reported but do NOT fail the pipeline —
+  # appropriate for a project that hasn't yet set up a Checkstyle config.
+  # ===========================================================================
+  code-quality:
+    name: Code Quality Check
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      # -Dcheckstyle.failOnViolation=false: report violations but keep going
+      - name: Run Checkstyle
+        run: mvn checkstyle:check -Dcheckstyle.failOnViolation=false
+
+      - name: Display build summary
+        run: |
+          echo "=============================="
+          echo " Code Quality Check Complete  "
+          echo "=============================="
+          echo "Branch : ${{ github.ref_name }}"
+          echo "Commit : ${{ github.sha }}"
+          echo "Author : ${{ github.actor }}"
+
+  # ===========================================================================
+  # Job 4: SECURITY SCAN
+  # Uses Trivy (by Aqua Security) to scan the Docker image for known CVEs.
+  # exit-code: 0 means vulnerabilities are reported but the pipeline does NOT
+  # fail — good for a course project where third-party dependencies may have
+  # known issues that aren't immediately fixable.
+  # ===========================================================================
+  security-scan:
+    name: Trivy Security Scan
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      # Rebuild the JAR and image on this runner (artifacts aren't Docker images)
+      - name: Build JAR for scanning
+        run: mvn clean package -DskipTests
+
+      - name: Build Docker image for scanning
+        run: docker build -t dataforge:scan .
+
+      # Trivy scans the image layers for CRITICAL and HIGH severity CVEs
+      - name: Run Trivy vulnerability scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'dataforge:scan'
+          format: 'table'       # human-readable output in the logs
+          exit-code: '0'        # 0 = report only, don't fail the pipeline
+          severity: 'CRITICAL,HIGH'
+
+  # ===========================================================================
+  # Job 5: DEPLOY TO STAGING
+  # Simulates a deployment to the staging environment.
+  # Only runs on the develop branch — feature branches are tested, not deployed.
+  # ===========================================================================
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [build, security-scan]
+    # Conditional: only deploy staging from the develop branch
+    if: github.ref == 'refs/heads/develop'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to staging
+        run: |
+          echo "============================================"
+          echo "  Deploying to STAGING environment         "
+          echo "============================================"
+          echo "Docker image : dataforge:${{ github.sha }}"
+          echo "Branch       : ${{ github.ref_name }}"
+          echo "Triggered by : ${{ github.actor }}"
+          echo "Timestamp    : $(date -u)"
+          echo "--------------------------------------------"
+          echo "Staging deployment completed successfully!"
+          echo "Staging URL  : https://staging.dataforge.example.com"
+
+  # ===========================================================================
+  # Job 6: DEPLOY TO PRODUCTION
+  # Simulates a deployment to the production environment.
+  # Only runs on main, and requires "deploy-staging" to have run first.
+  # "environment: production" enables GitHub's manual approval gate —
+  # a reviewer must approve before this job executes.
+  # ===========================================================================
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    # Conditional: only deploy to production from main
+    if: github.ref == 'refs/heads/main'
+    # The "production" environment can require manual approval in GitHub settings:
+    # Repo → Settings → Environments → production → Required reviewers
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to production
+        run: |
+          echo "============================================"
+          echo "  Deploying to PRODUCTION environment      "
+          echo "============================================"
+          echo "Docker image : dataforge:${{ github.sha }}"
+          echo "Branch       : ${{ github.ref_name }}"
+          echo "Triggered by : ${{ github.actor }}"
+          echo "Timestamp    : $(date -u)"
+          echo "--------------------------------------------"
+          echo "Production deployment completed successfully!"
+          echo "Production URL: https://dataforge.example.com"

@@ -1,0 +1,93 @@
+# =============================================================================
+# deployment.yaml — Kubernetes Deployment for DataForge
+#
+# WHAT IS A DEPLOYMENT?
+#   A Deployment tells Kubernetes: "I want N copies of this container running
+#   at all times." Kubernetes continuously watches the actual state of the
+#   cluster and works to match it to the desired state declared here.
+#
+# WHAT ARE REPLICAS?
+#   replicas: 2 means Kubernetes will run 2 identical copies (pods) of the
+#   DataForge container simultaneously. This provides:
+#     - High availability: if one pod crashes, the other keeps serving traffic
+#     - Zero-downtime rolling updates: Kubernetes updates one pod at a time
+#
+# WHAT IS A POD?
+#   A pod is the smallest deployable unit in Kubernetes. It wraps one or more
+#   containers that share the same network and storage. Here, each pod runs
+#   exactly one DataForge container.
+#
+# LIVENESS vs READINESS PROBES:
+#   livenessProbe  — "Is the app still alive?" If this fails, Kubernetes
+#                    restarts the container automatically.
+#   readinessProbe — "Is the app ready to receive traffic?" If this fails,
+#                    Kubernetes stops sending requests to this pod (but does
+#                    not restart it) until it recovers.
+# =============================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dataforge-deployment
+  namespace: default
+  labels:
+    app: dataforge
+spec:
+  # Run 2 pod replicas for high availability
+  replicas: 2
+
+  # The selector tells the Deployment which pods it owns
+  # (must match the labels in template.metadata.labels below)
+  selector:
+    matchLabels:
+      app: dataforge
+
+  template:
+    metadata:
+      labels:
+        app: dataforge
+    spec:
+      containers:
+        - name: dataforge
+          # Using the local image built by docker-compose
+          image: dataforge-dataforge-app:latest
+          # Never: always use the local image, never pull from a registry
+          # (appropriate for local/Minikube development)
+          imagePullPolicy: Never
+
+          ports:
+            - containerPort: 7070
+
+          # Load all keys from the ConfigMap as environment variables
+          envFrom:
+            - configMapRef:
+                name: dataforge-config
+
+          # Resource requests: what the container is guaranteed to get
+          # Resource limits:   the maximum the container is allowed to use
+          # Setting both prevents one pod from starving others on the node
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"      # 250 millicores = 0.25 of one CPU core
+            limits:
+              memory: "512Mi"
+              cpu: "500m"      # 500 millicores = 0.5 of one CPU core
+
+          # Liveness probe — restart the pod if /api/health stops responding
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 7070
+            initialDelaySeconds: 60   # wait 60s before first check (JVM startup time)
+            periodSeconds: 30          # check every 30 seconds
+            failureThreshold: 3        # restart after 3 consecutive failures
+
+          # Readiness probe — remove pod from load balancer if not ready
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 7070
+            initialDelaySeconds: 30   # start checking after 30s
+            periodSeconds: 10          # check every 10 seconds
+            failureThreshold: 3        # mark unready after 3 consecutive failures

@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+
+# Environment
+.env
+.env.local
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Build outputs
+target/
+dist/
+build/
+*.class
+*.jar
+*.war
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-compose.override.yml
+
+# Kubernetes
+.kubeconfig
+
+# Temporary
+tmp/
+temp/
+
+# Claude Code context files - DO NOT COMMIT
+claude.md
+project.md

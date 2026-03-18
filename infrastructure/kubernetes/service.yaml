@@ -1,0 +1,50 @@
+# =============================================================================
+# service.yaml — Kubernetes Service for DataForge
+#
+# WHAT IS A KUBERNETES SERVICE?
+#   Pods are ephemeral — they can be created, destroyed, and replaced at any
+#   time. Each new pod gets a different IP address. A Service provides a stable
+#   network endpoint (a fixed IP and DNS name) that always routes to the
+#   currently healthy pods, regardless of which specific pods are running.
+#
+#   Without a Service, you would have to track pod IPs manually — impractical
+#   in a dynamic environment.
+#
+# SERVICE TYPES:
+#   ClusterIP  — (default) accessible only inside the cluster. Good for
+#                internal service-to-service communication.
+#   NodePort   — opens a port on every cluster node and forwards traffic to
+#                the pods. Makes the app reachable from outside the cluster
+#                at <NodeIP>:<nodePort>. Good for development and local clusters.
+#   LoadBalancer — provisions an external load balancer (cloud providers).
+#                  Used in production on AWS/GCP/Azure.
+#
+# THIS FILE uses NodePort so the API is accessible from your browser
+# at http://localhost:30070 when running on Docker Desktop / Minikube.
+#
+# PORT MAPPING:
+#   port 80       — the port the Service listens on inside the cluster
+#   targetPort 7070 — the port the container listens on (must match containerPort)
+#   nodePort 30070  — the port exposed on the Node (accessible externally)
+# =============================================================================
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: dataforge-service
+  namespace: default
+  labels:
+    app: dataforge
+spec:
+  # Route traffic to any pod with the label app: dataforge
+  selector:
+    app: dataforge
+
+  ports:
+    - protocol: TCP
+      port: 80           # cluster-internal port
+      targetPort: 7070   # container port
+      nodePort: 30070    # external node port (range: 30000–32767)
+
+  # NodePort makes the service reachable from outside the cluster
+  type: NodePort

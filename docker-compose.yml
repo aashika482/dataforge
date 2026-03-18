@@ -1,0 +1,98 @@
+# =============================================================================
+# docker-compose.yml — DataForge Service Orchestration
+#
+# Docker Compose defines and runs multi-container applications.
+# This file describes three services:
+#   1. dataforge-app      — the Spring Boot API
+#   2. dataforge-postgres — a PostgreSQL database (for future persistence)
+#   3. dataforge-nagios   — Nagios monitoring dashboard
+#
+# Run everything:   docker-compose up --build
+# Stop everything:  docker-compose down
+# =============================================================================
+
+version: '3.8'
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # Service 1: Spring Boot API
+  # ---------------------------------------------------------------------------
+  dataforge-app:
+    # Build the image using the Dockerfile in the repo root.
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dataforge-app
+    ports:
+      # HOST_PORT:CONTAINER_PORT — maps port 7070 on your machine to 7070 inside the container
+      - "7070:7070"
+    environment:
+      # Activates Spring's "docker" profile (can have docker-specific settings in application-docker.properties)
+      - SPRING_PROFILES_ACTIVE=docker
+      - SERVER_PORT=7070
+    volumes:
+      # Mount a local logs/ folder so log files persist after the container stops
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      # Docker will ping this URL every 30 seconds to confirm the app is running
+      test: ["CMD-SHELL", "curl -f http://localhost:7070/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - dataforge-network
+
+  # ---------------------------------------------------------------------------
+  # Service 2: PostgreSQL Database
+  # Included for future persistence features (currently DataForge generates
+  # data in-memory, but a DB is useful for storing generation history/configs)
+  # ---------------------------------------------------------------------------
+  dataforge-postgres:
+    image: postgres:15-alpine
+    container_name: dataforge-postgres
+    environment:
+      - POSTGRES_DB=dataforgedb
+      - POSTGRES_USER=dataforge
+      - POSTGRES_PASSWORD=dataforge123
+    ports:
+      - "5432:5432"
+    volumes:
+      # Named volume — data persists even if the container is removed
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - dataforge-network
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Service 3: Nagios Monitoring
+  # Nagios monitors the health of services and sends alerts when things go down.
+  # Access the dashboard at http://localhost:8081/nagios (admin/nagios)
+  # ---------------------------------------------------------------------------
+  dataforge-nagios:
+    image: jasonrivers/nagios:latest
+    container_name: dataforge-nagios
+    ports:
+      - "8081:80"
+    networks:
+      - dataforge-network
+    restart: unless-stopped
+
+# =============================================================================
+# Networks
+# A dedicated bridge network lets containers talk to each other by service name
+# (e.g. dataforge-app can reach postgres at "dataforge-postgres:5432")
+# without exposing those connections to the host machine.
+# =============================================================================
+networks:
+  dataforge-network:
+    driver: bridge
+
+# =============================================================================
+# Volumes
+# Named volumes are managed by Docker and survive container restarts/removals.
+# =============================================================================
+volumes:
+  postgres_data:

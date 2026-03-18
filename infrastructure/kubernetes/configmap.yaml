@@ -1,0 +1,36 @@
+# =============================================================================
+# configmap.yaml — Kubernetes ConfigMap for DataForge
+#
+# WHAT IS A CONFIGMAP?
+#   A ConfigMap stores non-sensitive configuration data as key-value pairs.
+#   Instead of hardcoding environment variables inside the container image
+#   (which would mean rebuilding the image every time config changes), we
+#   store them here and inject them into pods at runtime.
+#
+# WHY USE A CONFIGMAP?
+#   - Keeps configuration separate from application code (12-factor app principle)
+#   - One change to this file updates all running pods (after a rollout)
+#   - Easy to review in Git — you can see exactly what config is deployed
+#
+# NOTE: ConfigMaps are for NON-SECRET data only (ports, profile names, app metadata).
+#   Passwords, API keys, and tokens belong in a Kubernetes Secret, not here.
+# =============================================================================
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dataforge-config
+  namespace: default
+  labels:
+    app: dataforge
+data:
+  # Port the Spring Boot server listens on inside the container
+  SERVER_PORT: "7070"
+
+  # Activates the "docker" Spring profile
+  # (allows docker-specific properties in application-docker.properties)
+  SPRING_PROFILES_ACTIVE: "docker"
+
+  # Application metadata (readable via /actuator/info if configured)
+  APP_NAME: "DataForge"
+  APP_VERSION: "1.0.0"
