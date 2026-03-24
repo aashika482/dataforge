@@ -10,11 +10,6 @@
 //   Repository  →  talks to the database (not needed here — we generate data)
 //   Generator   →  the actual data-production code
 //
-// WHY BOTHER WITH A SERVICE LAYER?
-//   The controller should be thin — it shouldn't know *how* data is generated,
-//   just *when* to generate it and *what* to return. By putting the "which
-//   generator do I pick?" logic here, we keep things easy to test and change.
-//
 // HOW IT WORKS:
 //   1. The controller calls generate(type, count).
 //   2. We switch on the type string to pick the right generator.

@@ -37,7 +37,7 @@ services:
     restart: unless-stopped
     healthcheck:
       # Docker will ping this URL every 30 seconds to confirm the app is running
-      test: ["CMD-SHELL", "curl -f http://localhost:7070/api/health || exit 1"]
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:7070/api/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

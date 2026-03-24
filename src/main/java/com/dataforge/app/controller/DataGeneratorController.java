@@ -4,7 +4,7 @@
 //
 // WHAT IS A REST API?
 //   REST (Representational State Transfer) is a style for building web APIs.
-//   A client (browser, Postman, frontend React app, CLI tool) sends an HTTP
+//   A client (browser, Postman, frontend React app) sends an HTTP
 //   request to a URL (called an endpoint). The server processes it and sends
 //   back a response — usually JSON.
 //

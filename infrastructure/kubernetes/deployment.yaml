@@ -49,8 +49,8 @@ spec:
     spec:
       containers:
         - name: dataforge
-          # Using the local image built by docker-compose
-          image: dataforge-dataforge-app:latest
+          # Using the image built with: docker build -t dataforge:latest .
+          image: dataforge:latest
           # Never: always use the local image, never pull from a registry
           # (appropriate for local/Minikube development)
           imagePullPolicy: Never

@@ -255,7 +255,7 @@ jobs:
   deploy-production:
     name: Deploy to Production
     runs-on: ubuntu-latest
-    needs: deploy-staging
+    needs: [build, security-scan]    # fixed: was "needs: deploy-staging" which can never run on main
     # Conditional: only deploy to production from main
     if: github.ref == 'refs/heads/main'
     # The "production" environment can require manual approval in GitHub settings:
