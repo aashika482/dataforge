@@ -38,6 +38,10 @@ docker-compose.override.yml
 tmp/
 temp/
 
+# Binaries (download from official sources, don't commit to repo)
+*.exe
+*.bin
+
 # Claude Code context files - DO NOT COMMIT
 claude.md
 project.md
