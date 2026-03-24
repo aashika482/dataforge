@@ -187,17 +187,7 @@ main
 - refactor: Code refactoring
 - chore: Maintenance tasks
 
----
 
-## Faculty Assessment
-
-| Criteria | Max Marks | Self Score | Remarks |
-|----------|-----------|------------|---------|
-| Implementation | 4 | [ ] | |
-| Documentation | 3 | [ ] | |
-| Innovation | 2 | [ ] | |
-| Presentation | 1 | [ ] | |
-| Total | 10 | [ ] | |
 
 ---
 
