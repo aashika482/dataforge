@@ -2,17 +2,7 @@
 
 ## Project Overview
 
-### Problem Statement
 Developers and QA engineers frequently need large volumes of realistic test data to validate applications, run load tests, and simulate production scenarios. Creating this data manually is time-consuming and error-prone. DataForge solves this by generating synthetic, schema-aware test data on demand across multiple data types and export formats.
-
-### Objectives
-- [ ] Build a Spring Boot REST API that generates realistic synthetic test data using Java DataFaker
-- [ ] Support 5 data types: Users, Transactions, Logs, IoT Events, and Ecommerce Orders
-- [ ] Export generated data in JSON, CSV, SQL INSERT, and XML formats
-- [ ] Provide a React web UI as the user interface
-- [ ] Containerize the application using Docker and orchestrate with Kubernetes
-- [ ] Implement a full CI/CD pipeline using GitHub Actions and Jenkins
-- [ ] Set up monitoring with Nagios and Spring Boot Actuator
 
 ### Key Features
 - Generate up to 1,000 rows of realistic fake data per request
