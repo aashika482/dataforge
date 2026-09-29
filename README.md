@@ -1,14 +1,5 @@
 # DataForge - Synthetic Test Data Generator
 
-Student Name: Aashika M
-Registration No: 23FE10CSE00482
-Course: CSE3253 DevOps [PE6]
-Semester: VI (2025-2026)
-Project Type: Test Data Generator
-Difficulty: Intermediate
-
----
-
 ## Project Overview
 
 ### Problem Statement
